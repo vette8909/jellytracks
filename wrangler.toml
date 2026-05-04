@@ -1,0 +1,22 @@
+name = "jellytracks"
+pages_build_output_dir = "public"
+compatibility_date = "2024-09-23"
+
+# KV namespace for track metadata
+# Create with: npx wrangler kv:namespace create TRACKS_KV
+# Then replace the id below with the output value
+[[kv_namespaces]]
+binding = "TRACKS_KV"
+id = "fc192ec5e9804a12a08bc2b863ca64ce"
+
+# R2 bucket for video and thumbnail files
+# Create with: npx wrangler r2 bucket create jellytracks-videos
+[[r2_buckets]]
+binding = "TRACKS_R2"
+bucket_name = "jellytracks-videos"
+
+# Environment variables (set secrets via Dashboard or wrangler secret put)
+# UPLOAD_PASSWORD  - password required to upload/delete tracks
+# R2_PUBLIC_URL    - public base URL of your R2 bucket
+#                    e.g. https://pub-XXXXXXXXXXXXX.r2.dev
+#                    Set this after enabling public access on your R2 bucket

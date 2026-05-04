@@ -1,0 +1,12 @@
+{
+  "name": "jellytracks",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx wrangler pages dev public --compatibility-date=2024-09-23",
+    "deploy": "npx wrangler pages deploy public --project-name=jellytracks"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

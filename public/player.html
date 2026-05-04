@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JellyTracks - Player</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="/" class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="white"><path d="M12 2C8 2 4 5 4 9c0 3 2 5.5 4 7v2a1 1 0 001 1h6a1 1 0 001-1v-2c2-1.5 4-4 4-7 0-4-4-7-8-7zm-2 16v-1h4v1h-4zm5.5-3.5C14 16 13 16.5 12 16.5s-2-.5-3.5-2C7 13 6 11 6 9c0-3.3 2.7-5 6-5s6 1.7 6 5c0 2-1 4-2.5 5.5z"/></svg>
+      </div>
+      <span class="logo-text">JellyTracks</span>
+    </a>
+
+    <div class="search-wrap">
+      <input type="text" id="searchInput" class="search-bar" placeholder="Search tracks..." autocomplete="off">
+      <button class="search-btn" id="searchBtn" aria-label="Search">
+        <svg viewBox="0 0 24 24" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </div>
+
+    <a href="/upload.html" class="upload-btn">
+      <svg viewBox="0 0 24 24" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      <span>Upload</span>
+    </a>
+  </div>
+</header>
+
+<main>
+  <!-- Not found state -->
+  <div class="not-found" id="notFound" hidden>
+    <h2>Track not found</h2>
+    <p>This track may have been removed or the link is invalid.</p>
+    <a href="/" class="upload-btn" style="display:inline-flex;">Browse All Tracks</a>
+  </div>
+
+  <!-- Player layout -->
+  <div class="player-layout" id="playerLayout" hidden>
+
+    <!-- Left: video + info -->
+    <div class="video-main">
+      <a href="/" class="back-link">
+        <svg viewBox="0 0 24 24" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Library
+      </a>
+
+      <div class="video-wrap">
+        <div class="video-loading" id="videoLoading">
+          <div class="spinner"></div>
+        </div>
+        <video id="videoPlayer" controls preload="metadata" style="display:none;"></video>
+      </div>
+
+      <div class="video-info">
+        <h1 class="video-title" id="videoTitle"></h1>
+        <div class="video-meta">
+          <div>
+            <div class="video-artist" id="videoArtist"></div>
+            <div class="video-date" id="videoDate"></div>
+          </div>
+          <div class="video-actions">
+            <button class="btn" id="fullscreenBtn" title="Fullscreen">
+              <svg viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+              Fullscreen
+            </button>
+            <button class="btn btn-danger" id="deleteBtn" title="Delete track">
+              <svg viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: sidebar -->
+    <aside class="player-sidebar">
+      <div class="sidebar-search-wrap">
+        <input type="text" id="sidebarSearch" class="sidebar-search" placeholder="Search tracks..." autocomplete="off">
+        <button class="sidebar-search-btn" aria-label="Search">
+          <svg viewBox="0 0 24 24" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+      </div>
+      <p class="sidebar-title">More Tracks</p>
+      <div class="sidebar-list" id="sidebarList"></div>
+    </aside>
+
+  </div>
+</main>
+
+<!-- Delete confirm modal -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <h3>Delete Track</h3>
+    <p>Enter your upload password to confirm deletion. This cannot be undone.</p>
+    <div class="form-group">
+      <input type="password" id="deletePassword" class="form-input" placeholder="Upload password">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="deleteCancelBtn">Cancel</button>
+      <button class="btn btn-primary btn-danger" id="deleteConfirmBtn">Delete Track</button>
+    </div>
+    <div class="alert alert-error" id="deleteError"></div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  JellyTracks &mdash; Karaoke for live streamers
+</footer>
+
+<script src="/js/player.js"></script>
+</body>
+</html>
