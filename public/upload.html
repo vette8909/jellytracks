@@ -77,10 +77,15 @@
           <div class="thumb-preview" id="thumbPreview">
             <canvas id="thumbCanvas"></canvas>
           </div>
+          <div class="thumb-scrubber" id="thumbScrubberWrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0;opacity:.6"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <input type="range" id="thumbScrubber" min="0" step="1" value="0">
+            <span id="thumbScrubberTime">0:00</span>
+          </div>
         </div>
 
         <!-- Hidden video for thumbnail capture -->
-        <video id="thumbVideo" style="display:none;" muted playsinline preload="metadata"></video>
+        <video id="thumbVideo" style="display:none;" muted playsinline preload="metadata" crossorigin="anonymous"></video>
 
         <div class="upload-progress" id="uploadProgress">
           <div class="progress-bar-wrap">

@@ -20,8 +20,55 @@ const deleteCancelBtn = document.getElementById('deleteCancelBtn');
 const deleteConfirmBtn = document.getElementById('deleteConfirmBtn');
 const deleteError = document.getElementById('deleteError');
 
-let allTracks = [];
+let currentTrack = null;
+let sidebarSearchActive = false;
 
+// Words treated as related for worship music suggestions
+const WORSHIP_WORDS = new Set([
+  'holy', 'spirit', 'ghost', 'god', 'lord', 'jesus', 'christ', 'savior',
+  'king', 'father', 'heaven', 'praise', 'worship', 'hallelujah', 'glory',
+  'grace', 'mercy', 'amen', 'forever', 'blessed', 'blessing', 'divine',
+  'faithful', 'righteousness', 'redeemer', 'sanctuary', 'lifted', 'exalt',
+]);
+
+const STOP_WORDS = new Set([
+  'the','a','an','and','or','but','in','on','at','to','for','of','with',
+  'by','i','my','me','you','your','it','is','be','are','was','this',
+]);
+
+function titleWords(str) {
+  return new Set((str || '').toLowerCase().match(/\b[a-z]{3,}\b/g)?.filter(w => !STOP_WORDS.has(w)) ?? []);
+}
+
+function scoreTrack(candidate, current) {
+  if (candidate.id === current.id) return -1;
+
+  let score = 0;
+
+  if (candidate.artist && current.artist &&
+      candidate.artist.trim().toLowerCase() === current.artist.trim().toLowerCase()) {
+    score += 100;
+  }
+
+  const curWords = titleWords(current.title);
+  const canWords = titleWords(candidate.title);
+  for (const w of curWords) if (canWords.has(w)) score += 15;
+
+  // Worship cluster: if both tracks mention any worship keyword, they're related
+  const curHasWorship = [...curWords].some(w => WORSHIP_WORDS.has(w));
+  const canHasWorship = [...canWords].some(w => WORSHIP_WORDS.has(w));
+  if (curHasWorship && canHasWorship) score += 10;
+
+  return score;
+}
+
+function getSuggestions(allTracks, current) {
+  return allTracks
+    .map(t => ({ track: t, score: scoreTrack(t, current) }))
+    .filter(({ score }) => score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ track }) => track);
+}
 
 function formatDate(iso) {
   try {
@@ -35,17 +82,17 @@ async function loadTrack() {
   try {
     const res = await fetch(`/api/track/${encodeURIComponent(trackId)}`);
     if (!res.ok) { showNotFound(); return; }
-    const track = await res.json();
+    currentTrack = await res.json();
 
-    document.title = `${track.title} — JellyTracks`;
-    videoTitle.textContent = track.title;
-    videoArtist.textContent = track.artist || '';
-    videoDate.textContent = track.uploadedAt ? formatDate(track.uploadedAt) : '';
+    document.title = `${currentTrack.title} — JellyTracks`;
+    videoTitle.textContent = currentTrack.title;
+    videoArtist.textContent = currentTrack.artist || '';
+    videoDate.textContent = currentTrack.uploadedAt ? formatDate(currentTrack.uploadedAt) : '';
 
     videoLoading.style.display = 'flex';
     videoPlayer.style.display = 'none';
 
-    videoPlayer.src = track.videoUrl;
+    videoPlayer.src = currentTrack.videoUrl;
     videoPlayer.addEventListener('canplay', () => {
       videoLoading.style.display = 'none';
       videoPlayer.style.display = 'block';
@@ -63,11 +110,16 @@ async function loadTrack() {
 }
 
 async function loadSidebar(query = '') {
+  sidebarSearchActive = query.length > 0;
   const url = query ? `/api/tracks?search=${encodeURIComponent(query)}` : '/api/tracks';
   try {
     const res = await fetch(url);
-    allTracks = await res.json();
-    renderSidebar(allTracks);
+    const tracks = await res.json();
+    if (sidebarSearchActive || !currentTrack) {
+      renderSidebar(tracks);
+    } else {
+      renderSidebar(getSuggestions(tracks, currentTrack));
+    }
   } catch {
     sidebarList.innerHTML = '<p style="color:var(--text-faint);font-size:.82rem;padding:10px 0;">Could not load tracks</p>';
   }
@@ -177,10 +229,7 @@ deleteConfirmBtn.addEventListener('click', async () => {
   }
 });
 
-// Handle search-on-arrival from home page redirect (player search bar)
 const urlParams = new URLSearchParams(location.search);
-if (urlParams.has('search')) {
-  searchInput.value = urlParams.get('search');
-}
+if (urlParams.has('search')) searchInput.value = urlParams.get('search');
 
 loadTrack();

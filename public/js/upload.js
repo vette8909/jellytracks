@@ -8,6 +8,9 @@ const videoFileName = document.getElementById('videoFileName');
 const thumbPreview = document.getElementById('thumbPreview');
 const thumbCanvas = document.getElementById('thumbCanvas');
 const thumbVideo = document.getElementById('thumbVideo');
+const thumbScrubberWrap = document.getElementById('thumbScrubberWrap');
+const thumbScrubber = document.getElementById('thumbScrubber');
+const thumbScrubberTime = document.getElementById('thumbScrubberTime');
 const uploadProgress = document.getElementById('uploadProgress');
 const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
@@ -16,7 +19,8 @@ const alertError = document.getElementById('alertError');
 const submitBtn = document.getElementById('submitBtn');
 
 let thumbBlob = null;
-let manualThumbObjectUrl = null;
+let manualThumb = false;
+let videoObjectUrl = null;
 
 [videoDropZone, thumbDropZone].forEach(zone => {
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
@@ -30,40 +34,56 @@ videoFileInput.addEventListener('change', () => {
 
   videoFileName.textContent = file.name;
   videoFileSelected.classList.add('show');
+  manualThumb = false;
+  thumbScrubberWrap.classList.remove('show');
 
-  const objectUrl = URL.createObjectURL(file);
-  thumbVideo.src = objectUrl;
+  if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+  videoObjectUrl = URL.createObjectURL(file);
+  thumbVideo.src = videoObjectUrl;
+
   thumbVideo.addEventListener('loadedmetadata', () => {
-    thumbVideo.currentTime = Math.min(1, thumbVideo.duration * 0.1);
+    const dur = thumbVideo.duration;
+    thumbScrubber.max = Math.floor(dur);
+    // Seek to 20% — avoids black intros common in karaoke videos
+    thumbVideo.currentTime = Math.min(dur * 0.2, dur - 0.5);
   }, { once: true });
-  thumbVideo.addEventListener('seeked', captureFrame, { once: true });
 });
 
-function captureFrame() {
+// Capture a frame every time the video finishes seeking (initial + scrubber drags)
+thumbVideo.addEventListener('seeked', () => {
+  if (manualThumb) return;
   try {
     const w = thumbVideo.videoWidth || 640;
     const h = thumbVideo.videoHeight || 360;
     thumbCanvas.width = w;
     thumbCanvas.height = h;
     thumbCanvas.getContext('2d').drawImage(thumbVideo, 0, 0, w, h);
-    thumbPreview.classList.add('show');
     thumbCanvas.toBlob(blob => { thumbBlob = blob; }, 'image/jpeg', 0.85);
-    URL.revokeObjectURL(thumbVideo.src);
+    thumbPreview.classList.add('show');
+    thumbCanvas.style.display = '';
+    const t = Math.round(thumbVideo.currentTime);
+    thumbScrubber.value = t;
+    thumbScrubberTime.textContent = fmtTime(t);
+    thumbScrubberWrap.classList.add('show');
   } catch {
-    // Auto-thumbnail unavailable (e.g. unsupported codec) — ignore
+    // Unsupported codec — skip silently
   }
-}
+});
+
+thumbScrubber.addEventListener('input', () => {
+  thumbVideo.currentTime = Number(thumbScrubber.value);
+  thumbScrubberTime.textContent = fmtTime(Number(thumbScrubber.value));
+});
 
 thumbFileInput.addEventListener('change', () => {
   const file = thumbFileInput.files[0];
   if (!file) return;
 
+  manualThumb = true;
   thumbBlob = file;
   thumbPreview.classList.add('show');
+  thumbScrubberWrap.classList.remove('show');
   thumbCanvas.style.display = 'none';
-
-  if (manualThumbObjectUrl) URL.revokeObjectURL(manualThumbObjectUrl);
-  manualThumbObjectUrl = URL.createObjectURL(file);
 
   let img = thumbPreview.querySelector('img.manual-thumb');
   if (!img) {
@@ -72,7 +92,9 @@ thumbFileInput.addEventListener('change', () => {
     img.style.cssText = 'width:100%;max-height:200px;object-fit:cover;display:block;';
     thumbPreview.appendChild(img);
   }
-  img.src = manualThumbObjectUrl;
+  const prev = img.src;
+  if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+  img.src = URL.createObjectURL(file);
 });
 
 form.addEventListener('submit', async e => {
@@ -90,7 +112,6 @@ form.addEventListener('submit', async e => {
   setUploading(true, 'Saving track info...');
 
   try {
-    // Step 1: upload metadata + thumbnail, receive presigned URL for video
     const meta = new FormData();
     meta.append('title', title);
     meta.append('artist', artist);
@@ -104,21 +125,30 @@ form.addEventListener('submit', async e => {
     }
     const { id, uploadUrl } = await metaRes.json();
 
-    // Step 2: upload video directly to R2 via presigned URL — no size limit
     await uploadVideo(videoFile, uploadUrl);
 
     showSuccess(`Track uploaded! <a href="/player.html?id=${id}" style="color:var(--cyan-light);text-decoration:underline;">Play it now</a>`);
-    form.reset();
-    videoFileSelected.classList.remove('show');
-    thumbPreview.classList.remove('show');
-    thumbBlob = null;
-    progressBar.style.width = '0%';
+    resetForm();
   } catch (err) {
     showError(err.message || 'Upload failed. Please try again.');
   } finally {
     setUploading(false);
   }
 });
+
+function resetForm() {
+  form.reset();
+  videoFileSelected.classList.remove('show');
+  thumbPreview.classList.remove('show');
+  thumbScrubberWrap.classList.remove('show');
+  thumbBlob = null;
+  manualThumb = false;
+  progressBar.style.width = '0%';
+  if (videoObjectUrl) { URL.revokeObjectURL(videoObjectUrl); videoObjectUrl = null; }
+  thumbVideo.src = '';
+  const img = thumbPreview.querySelector('img.manual-thumb');
+  if (img) img.remove();
+}
 
 function uploadVideo(file, uploadUrl) {
   return new Promise((resolve, reject) => {
@@ -137,17 +167,19 @@ function uploadVideo(file, uploadUrl) {
     });
 
     xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(new Error(`Video upload failed (${xhr.status})`));
-      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Video upload failed (${xhr.status})`));
     });
-
     xhr.addEventListener('error', () => reject(new Error('Network error during video upload')));
     xhr.addEventListener('abort', () => reject(new Error('Video upload was cancelled')));
     xhr.send(file);
   });
+}
+
+function fmtTime(secs) {
+  const m = Math.floor(secs / 60);
+  const s = String(secs % 60).padStart(2, '0');
+  return `${m}:${s}`;
 }
 
 function getExtension(filename) {

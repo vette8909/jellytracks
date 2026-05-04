@@ -742,6 +742,27 @@ img { display: block; }
 .thumb-preview img { width: 100%; max-height: 200px; object-fit: cover; }
 .thumb-preview canvas { width: 100%; max-height: 200px; display: block; }
 
+/* Thumbnail frame scrubber */
+.thumb-scrubber {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+.thumb-scrubber.show { display: flex; }
+.thumb-scrubber input[type=range] {
+  flex: 1;
+  accent-color: var(--purple);
+  cursor: pointer;
+  height: 4px;
+}
+
 /* Progress */
 .upload-progress {
   display: none;
