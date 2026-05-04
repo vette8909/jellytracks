@@ -1,3 +1,5 @@
+import { loadTracksIndex, saveTracksIndex } from '../utils.js';
+
 export async function onRequestPost({ request, env }) {
   let formData;
   try {
@@ -25,36 +27,32 @@ export async function onRequestPost({ request, env }) {
     await env.TRACKS_R2.put(videoKey, videoFile.stream(), {
       httpMetadata: { contentType: videoFile.type || 'video/mp4' }
     });
-  } catch (err) {
+  } catch {
     return Response.json({ error: 'Failed to store video' }, { status: 500 });
   }
 
+  let thumbnailKey = null;
   let thumbnailUrl = null;
-  if (thumbFile && typeof thumbFile !== 'string' && thumbFile.size > 0) {
-    const thumbKey = `thumbnails/${id}.jpg`;
-    try {
-      await env.TRACKS_R2.put(thumbKey, thumbFile.stream(), {
-        httpMetadata: { contentType: thumbFile.type || 'image/jpeg' }
-      });
-      thumbnailUrl = `${env.R2_PUBLIC_URL}/${thumbKey}`;
-    } catch {
-      // Non-fatal: track still uploads without thumbnail
-    }
-  }
 
-  const track = {
-    id,
-    title,
-    artist,
-    videoKey,
-    thumbnailUrl,
-    uploadedAt: new Date().toISOString()
-  };
+  const thumbUpload = (thumbFile && typeof thumbFile !== 'string' && thumbFile.size > 0)
+    ? (async () => {
+        const key = `thumbnails/${id}.jpg`;
+        await env.TRACKS_R2.put(key, thumbFile.stream(), {
+          httpMetadata: { contentType: thumbFile.type || 'image/jpeg' }
+        });
+        thumbnailKey = key;
+        thumbnailUrl = `${env.R2_PUBLIC_URL}/${key}`;
+      })().catch(() => {})
+    : Promise.resolve();
 
-  const raw = await env.TRACKS_KV.get('tracks_index');
-  const tracks = raw ? JSON.parse(raw) : [];
+  const [tracks] = await Promise.all([
+    loadTracksIndex(env.TRACKS_KV),
+    thumbUpload
+  ]);
+
+  const track = { id, title, artist, videoKey, thumbnailKey, thumbnailUrl, uploadedAt: new Date().toISOString() };
   tracks.unshift(track);
-  await env.TRACKS_KV.put('tracks_index', JSON.stringify(tracks));
+  await saveTracksIndex(env.TRACKS_KV, tracks);
 
   return Response.json({ success: true, id }, { status: 201 });
 }

@@ -1,9 +1,10 @@
+import { loadTracksIndex } from '../utils.js';
+
 export async function onRequestGet({ request, env }) {
   const url = new URL(request.url);
   const search = url.searchParams.get('search')?.trim().toLowerCase() || '';
 
-  const raw = await env.TRACKS_KV.get('tracks_index');
-  let tracks = raw ? JSON.parse(raw) : [];
+  let tracks = await loadTracksIndex(env.TRACKS_KV);
 
   if (search) {
     tracks = tracks.filter(t =>
@@ -12,7 +13,5 @@ export async function onRequestGet({ request, env }) {
     );
   }
 
-  return Response.json(tracks, {
-    headers: { 'Cache-Control': 'no-store' }
-  });
+  return Response.json(tracks, { headers: { 'Cache-Control': 'no-store' } });
 }

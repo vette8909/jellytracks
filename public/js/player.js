@@ -22,13 +22,6 @@ const deleteError = document.getElementById('deleteError');
 
 let allTracks = [];
 
-function escapeHTML(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function escapeAttr(str) {
-  return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
 
 function formatDate(iso) {
   try {
@@ -150,7 +143,7 @@ deleteModal.addEventListener('click', e => {
 deleteConfirmBtn.addEventListener('click', async () => {
   const pwd = deletePassword.value;
   if (!pwd) {
-    deleteError.textContent = 'Please enter the upload password.';
+    deleteError.textContent = 'Please enter the delete password.';
     deleteError.classList.add('show');
     return;
   }

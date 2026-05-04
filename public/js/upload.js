@@ -1,3 +1,5 @@
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 const form = document.getElementById('uploadForm');
 const videoFileInput = document.getElementById('videoFile');
 const thumbFileInput = document.getElementById('thumbFile');
@@ -16,15 +18,14 @@ const alertError = document.getElementById('alertError');
 const submitBtn = document.getElementById('submitBtn');
 
 let thumbBlob = null;
+let manualThumbObjectUrl = null;
 
-// ─── Drag and drop styling ───
 [videoDropZone, thumbDropZone].forEach(zone => {
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
   zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); });
 });
 
-// ─── Video file selection ───
 videoFileInput.addEventListener('change', () => {
   const file = videoFileInput.files[0];
   if (!file) return;
@@ -32,10 +33,11 @@ videoFileInput.addEventListener('change', () => {
   videoFileName.textContent = file.name;
   videoFileSelected.classList.add('show');
 
-  // Auto-generate thumbnail from first frame
   const objectUrl = URL.createObjectURL(file);
   thumbVideo.src = objectUrl;
-  thumbVideo.currentTime = 1;
+  thumbVideo.addEventListener('loadedmetadata', () => {
+    thumbVideo.currentTime = Math.min(1, thumbVideo.duration * 0.1);
+  }, { once: true });
   thumbVideo.addEventListener('seeked', captureFrame, { once: true });
 });
 
@@ -45,10 +47,8 @@ function captureFrame() {
     const h = thumbVideo.videoHeight || 360;
     thumbCanvas.width = w;
     thumbCanvas.height = h;
-    const ctx = thumbCanvas.getContext('2d');
-    ctx.drawImage(thumbVideo, 0, 0, w, h);
+    thumbCanvas.getContext('2d').drawImage(thumbVideo, 0, 0, w, h);
     thumbPreview.classList.add('show');
-
     thumbCanvas.toBlob(blob => { thumbBlob = blob; }, 'image/jpeg', 0.85);
     URL.revokeObjectURL(thumbVideo.src);
   } catch {
@@ -56,16 +56,17 @@ function captureFrame() {
   }
 }
 
-// ─── Manual thumbnail selection ───
 thumbFileInput.addEventListener('change', () => {
   const file = thumbFileInput.files[0];
   if (!file) return;
 
   thumbBlob = file;
   thumbPreview.classList.add('show');
-
-  // Replace canvas with img
   thumbCanvas.style.display = 'none';
+
+  if (manualThumbObjectUrl) URL.revokeObjectURL(manualThumbObjectUrl);
+  manualThumbObjectUrl = URL.createObjectURL(file);
+
   let img = thumbPreview.querySelector('img.manual-thumb');
   if (!img) {
     img = document.createElement('img');
@@ -73,15 +74,11 @@ thumbFileInput.addEventListener('change', () => {
     img.style.cssText = 'width:100%;max-height:200px;object-fit:cover;display:block;';
     thumbPreview.appendChild(img);
   }
-  const reader = new FileReader();
-  reader.onload = e => { img.src = e.target.result; };
-  reader.readAsDataURL(file);
+  img.src = manualThumbObjectUrl;
 });
 
-// ─── Form submission ───
 form.addEventListener('submit', async e => {
   e.preventDefault();
-
   clearAlerts();
 
   const title = document.getElementById('songTitle').value.trim();
@@ -91,9 +88,7 @@ form.addEventListener('submit', async e => {
   if (!title) { showError('Please enter a song title.'); return; }
   if (!artist) { showError('Please enter an artist name.'); return; }
   if (!videoFile) { showError('Please select a video file.'); return; }
-
-  const MAX_BYTES = 100 * 1024 * 1024;
-  if (videoFile.size > MAX_BYTES) {
+  if (videoFile.size > MAX_UPLOAD_BYTES) {
     showError(`File is too large (${(videoFile.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 100 MB. Please compress the video first.`);
     return;
   }
@@ -111,7 +106,6 @@ form.addEventListener('submit', async e => {
 
     if (result.ok) {
       const data = await result.json();
-      setUploading(false);
       showSuccess(`Track uploaded successfully! <a href="/player.html?id=${data.id}" style="color:var(--cyan-light);text-decoration:underline;">Play it now</a>`);
       form.reset();
       videoFileSelected.classList.remove('show');
@@ -120,12 +114,12 @@ form.addEventListener('submit', async e => {
       progressBar.style.width = '0%';
     } else {
       const data = await result.json().catch(() => ({}));
-      setUploading(false);
       showError(data.error || `Upload failed (HTTP ${result.status}). Please try again.`);
     }
   } catch (err) {
-    setUploading(false);
     showError(`Upload failed: ${err.message || 'network error'}. File size: ${(videoFile.size / 1024 / 1024).toFixed(1)} MB.`);
+  } finally {
+    setUploading(false);
   }
 });
 
@@ -164,17 +158,6 @@ function setUploading(uploading) {
   if (uploading) progressBar.style.width = '0%';
 }
 
-function showSuccess(html) {
-  alertSuccess.innerHTML = html;
-  alertSuccess.classList.add('show');
-}
-
-function showError(msg) {
-  alertError.textContent = msg;
-  alertError.classList.add('show');
-}
-
-function clearAlerts() {
-  alertSuccess.classList.remove('show');
-  alertError.classList.remove('show');
-}
+function showSuccess(html) { alertSuccess.innerHTML = html; alertSuccess.classList.add('show'); }
+function showError(msg) { alertError.textContent = msg; alertError.classList.add('show'); }
+function clearAlerts() { alertSuccess.classList.remove('show'); alertError.classList.remove('show'); }
