@@ -37,7 +37,32 @@ const STOP_WORDS = new Set([
 ]);
 
 function titleWords(str) {
-  return new Set((str || '').toLowerCase().match(/\b[a-z]{3,}\b/g)?.filter(w => !STOP_WORDS.has(w)) ?? []);
+  return (str || '').toLowerCase().match(/\b[a-z]{3,}\b/g)?.filter(w => !STOP_WORDS.has(w)) ?? [];
+}
+
+// "grave" matches "graves" (substring) or within 1 edit for longer words
+function wordSimilar(a, b) {
+  if (a === b) return true;
+  if (b.includes(a) || a.includes(b)) return true;
+  const len = Math.max(a.length, b.length);
+  const maxDist = Math.floor(len / 4);
+  if (maxDist === 0) return false;
+  return editDistance(a, b) <= maxDist;
+}
+
+function editDistance(a, b) {
+  if (Math.abs(a.length - b.length) > Math.max(a.length, b.length) / 2) return 99;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let cur = i;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = cur;
+      cur = a[i - 1] === b[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j], cur, prev[j - 1]);
+      prev[j - 1] = temp;
+    }
+    prev[b.length] = cur;
+  }
+  return prev[b.length];
 }
 
 function scoreTrack(candidate, current) {
@@ -52,11 +77,13 @@ function scoreTrack(candidate, current) {
 
   const curWords = titleWords(current.title);
   const canWords = titleWords(candidate.title);
-  for (const w of curWords) if (canWords.has(w)) score += 15;
+  for (const cw of curWords) {
+    if (canWords.some(tw => wordSimilar(cw, tw))) score += 15;
+  }
 
   // Worship cluster: if both tracks mention any worship keyword, they're related
-  const curHasWorship = [...curWords].some(w => WORSHIP_WORDS.has(w));
-  const canHasWorship = [...canWords].some(w => WORSHIP_WORDS.has(w));
+  const curHasWorship = curWords.some(w => WORSHIP_WORDS.has(w));
+  const canHasWorship = canWords.some(w => WORSHIP_WORDS.has(w));
   if (curHasWorship && canHasWorship) score += 10;
 
   return score;
