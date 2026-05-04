@@ -92,6 +92,12 @@ form.addEventListener('submit', async e => {
   if (!artist) { showError('Please enter an artist name.'); return; }
   if (!videoFile) { showError('Please select a video file.'); return; }
 
+  const MAX_BYTES = 100 * 1024 * 1024;
+  if (videoFile.size > MAX_BYTES) {
+    showError(`File is too large (${(videoFile.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 100 MB. Please compress the video first.`);
+    return;
+  }
+
   const formData = new FormData();
   formData.append('title', title);
   formData.append('artist', artist);
@@ -101,7 +107,6 @@ form.addEventListener('submit', async e => {
   setUploading(true);
 
   try {
-    // Use XHR for upload progress
     const result = await uploadWithProgress(formData);
 
     if (result.ok) {
@@ -116,11 +121,11 @@ form.addEventListener('submit', async e => {
     } else {
       const data = await result.json().catch(() => ({}));
       setUploading(false);
-      showError(data.error || 'Upload failed. Please try again.');
+      showError(data.error || `Upload failed (HTTP ${result.status}). Please try again.`);
     }
   } catch (err) {
     setUploading(false);
-    showError('Upload failed. Check your connection and try again.');
+    showError(`Upload failed: ${err.message || 'network error'}. File size: ${(videoFile.size / 1024 / 1024).toFixed(1)} MB.`);
   }
 });
 
@@ -145,7 +150,9 @@ function uploadWithProgress(formData) {
       });
     });
 
-    xhr.addEventListener('error', () => reject(new Error('Network error')));
+    xhr.addEventListener('error', () => reject(new Error(`Network error (status ${xhr.status})`)));
+    xhr.addEventListener('abort', () => reject(new Error('Upload was aborted')));
+    xhr.addEventListener('timeout', () => reject(new Error('Upload timed out')));
     xhr.send(formData);
   });
 }
