@@ -1,5 +1,3 @@
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
-
 const form = document.getElementById('uploadForm');
 const videoFileInput = document.getElementById('videoFile');
 const thumbFileInput = document.getElementById('thumbFile');
@@ -52,7 +50,7 @@ function captureFrame() {
     thumbCanvas.toBlob(blob => { thumbBlob = blob; }, 'image/jpeg', 0.85);
     URL.revokeObjectURL(thumbVideo.src);
   } catch {
-    // Auto-thumbnail not available (cross-origin, etc.) — ignore
+    // Auto-thumbnail unavailable (e.g. unsupported codec) — ignore
   }
 }
 
@@ -88,74 +86,81 @@ form.addEventListener('submit', async e => {
   if (!title) { showError('Please enter a song title.'); return; }
   if (!artist) { showError('Please enter an artist name.'); return; }
   if (!videoFile) { showError('Please select a video file.'); return; }
-  if (videoFile.size > MAX_UPLOAD_BYTES) {
-    showError(`File is too large (${(videoFile.size / 1024 / 1024).toFixed(0)} MB). Maximum size is 100 MB. Please compress the video first.`);
-    return;
-  }
 
-  const formData = new FormData();
-  formData.append('title', title);
-  formData.append('artist', artist);
-  formData.append('video', videoFile);
-  if (thumbBlob) formData.append('thumbnail', thumbBlob, 'thumbnail.jpg');
-
-  setUploading(true);
+  setUploading(true, 'Saving track info...');
 
   try {
-    const result = await uploadWithProgress(formData);
+    // Step 1: upload metadata + thumbnail (small request)
+    const meta = new FormData();
+    meta.append('title', title);
+    meta.append('artist', artist);
+    meta.append('videoExt', getExtension(videoFile.name));
+    if (thumbBlob) meta.append('thumbnail', thumbBlob, 'thumbnail.jpg');
 
-    if (result.ok) {
-      const data = await result.json();
-      showSuccess(`Track uploaded successfully! <a href="/player.html?id=${data.id}" style="color:var(--cyan-light);text-decoration:underline;">Play it now</a>`);
-      form.reset();
-      videoFileSelected.classList.remove('show');
-      thumbPreview.classList.remove('show');
-      thumbBlob = null;
-      progressBar.style.width = '0%';
-    } else {
-      const data = await result.json().catch(() => ({}));
-      showError(data.error || `Upload failed (HTTP ${result.status}). Please try again.`);
+    const metaRes = await fetch('/api/upload', { method: 'POST', body: meta });
+    if (!metaRes.ok) {
+      const d = await metaRes.json().catch(() => ({}));
+      throw new Error(d.error || `Server error (${metaRes.status})`);
     }
+    const { id } = await metaRes.json();
+
+    // Step 2: stream video directly to R2 — no size limit
+    await uploadVideo(videoFile, id);
+
+    showSuccess(`Track uploaded! <a href="/player.html?id=${id}" style="color:var(--cyan-light);text-decoration:underline;">Play it now</a>`);
+    form.reset();
+    videoFileSelected.classList.remove('show');
+    thumbPreview.classList.remove('show');
+    thumbBlob = null;
+    progressBar.style.width = '0%';
   } catch (err) {
-    showError(`Upload failed: ${err.message || 'network error'}. File size: ${(videoFile.size / 1024 / 1024).toFixed(1)} MB.`);
+    showError(err.message || 'Upload failed. Please try again.');
   } finally {
     setUploading(false);
   }
 });
 
-function uploadWithProgress(formData) {
+function uploadVideo(file, id) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload');
+    xhr.open('PUT', `/api/video/${encodeURIComponent(id)}`);
+    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
 
     xhr.upload.addEventListener('progress', e => {
       if (e.lengthComputable) {
         const pct = Math.round((e.loaded / e.total) * 100);
         progressBar.style.width = `${pct}%`;
-        progressText.textContent = pct < 100 ? `Uploading... ${pct}%` : 'Processing...';
+        progressText.textContent = pct < 100
+          ? `Uploading video... ${pct}% (${(e.loaded / 1024 / 1024).toFixed(0)} / ${(e.total / 1024 / 1024).toFixed(0)} MB)`
+          : 'Finishing up...';
       }
     });
 
     xhr.addEventListener('load', () => {
-      resolve({
-        ok: xhr.status >= 200 && xhr.status < 300,
-        status: xhr.status,
-        json: () => Promise.resolve(JSON.parse(xhr.responseText))
-      });
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        const d = (() => { try { return JSON.parse(xhr.responseText); } catch { return {}; } })();
+        reject(new Error(d.error || `Video upload failed (${xhr.status})`));
+      }
     });
 
-    xhr.addEventListener('error', () => reject(new Error(`Network error (status ${xhr.status})`)));
-    xhr.addEventListener('abort', () => reject(new Error('Upload was aborted')));
-    xhr.addEventListener('timeout', () => reject(new Error('Upload timed out')));
-    xhr.send(formData);
+    xhr.addEventListener('error', () => reject(new Error('Network error during video upload')));
+    xhr.addEventListener('abort', () => reject(new Error('Video upload was cancelled')));
+    xhr.send(file);
   });
 }
 
-function setUploading(uploading) {
+function getExtension(filename) {
+  const match = filename.match(/\.[a-zA-Z0-9]+$/);
+  return match ? match[0].toLowerCase() : '.mp4';
+}
+
+function setUploading(uploading, label = 'Uploading...') {
   submitBtn.disabled = uploading;
-  submitBtn.textContent = uploading ? 'Uploading...' : 'Upload Track';
+  submitBtn.textContent = uploading ? label : 'Upload Track';
   uploadProgress.classList.toggle('show', uploading);
-  if (uploading) progressBar.style.width = '0%';
+  if (uploading) { progressBar.style.width = '0%'; progressText.textContent = label; }
 }
 
 function showSuccess(html) { alertSuccess.innerHTML = html; alertSuccess.classList.add('show'); }
