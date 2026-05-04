@@ -354,6 +354,7 @@ img { display: block; }
   justify-content: center;
   padding: 60px 0;
 }
+.loading-spinner[hidden] { display: none; }
 
 .spinner {
   width: 40px;
