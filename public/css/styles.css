@@ -1,5 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
 
+/* Ensure the hidden attribute always wins over CSS display values */
+[hidden] { display: none !important; }
+
 :root {
   --bg-primary: #0c0c1e;
   --bg-secondary: #12122e;
@@ -354,7 +357,7 @@ img { display: block; }
   justify-content: center;
   padding: 60px 0;
 }
-.loading-spinner[hidden] { display: none; }
+
 
 .spinner {
   width: 40px;
