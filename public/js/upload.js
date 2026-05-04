@@ -90,7 +90,7 @@ form.addEventListener('submit', async e => {
   setUploading(true, 'Saving track info...');
 
   try {
-    // Step 1: upload metadata + thumbnail (small request)
+    // Step 1: upload metadata + thumbnail, receive presigned URL for video
     const meta = new FormData();
     meta.append('title', title);
     meta.append('artist', artist);
@@ -102,10 +102,10 @@ form.addEventListener('submit', async e => {
       const d = await metaRes.json().catch(() => ({}));
       throw new Error(d.error || `Server error (${metaRes.status})`);
     }
-    const { id } = await metaRes.json();
+    const { id, uploadUrl } = await metaRes.json();
 
-    // Step 2: stream video directly to R2 — no size limit
-    await uploadVideo(videoFile, id);
+    // Step 2: upload video directly to R2 via presigned URL — no size limit
+    await uploadVideo(videoFile, uploadUrl);
 
     showSuccess(`Track uploaded! <a href="/player.html?id=${id}" style="color:var(--cyan-light);text-decoration:underline;">Play it now</a>`);
     form.reset();
@@ -120,10 +120,10 @@ form.addEventListener('submit', async e => {
   }
 });
 
-function uploadVideo(file, id) {
+function uploadVideo(file, uploadUrl) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', `/api/video/${encodeURIComponent(id)}`);
+    xhr.open('PUT', uploadUrl);
     xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
 
     xhr.upload.addEventListener('progress', e => {
@@ -140,8 +140,7 @@ function uploadVideo(file, id) {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve();
       } else {
-        const d = (() => { try { return JSON.parse(xhr.responseText); } catch { return {}; } })();
-        reject(new Error(d.error || `Video upload failed (${xhr.status})`));
+        reject(new Error(`Video upload failed (${xhr.status})`));
       }
     });
 

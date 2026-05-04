@@ -7,6 +7,6 @@
     "deploy": "npx wrangler pages deploy public --project-name=jellytracks"
   },
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^4.87.0"
   }
 }

@@ -1,6 +1,6 @@
-import { loadTracksIndex, saveTracksIndex } from '../utils.js';
+import { loadTracksIndex, saveTracksIndex, generatePresignedPutUrl } from '../utils.js';
 
-// Handles metadata + thumbnail only. Video is uploaded separately via PUT /api/video/:id.
+// Handles metadata + thumbnail only. Video is uploaded separately via the presigned URL.
 export async function onRequestPost({ request, env }) {
   let formData;
   try {
@@ -39,10 +39,17 @@ export async function onRequestPost({ request, env }) {
   tracks.unshift(track);
   await saveTracksIndex(env.TRACKS_KV, tracks);
 
-  return Response.json({ success: true, id }, { status: 201 });
+  const uploadUrl = await generatePresignedPutUrl(env, videoKey, videoExtToMime(videoExt));
+
+  return Response.json({ success: true, id, uploadUrl }, { status: 201 });
 }
 
 function sanitizeExt(ext) {
   const match = String(ext).match(/^\.[a-zA-Z0-9]{1,10}$/);
   return match ? match[0].toLowerCase() : '.mp4';
+}
+
+function videoExtToMime(ext) {
+  const map = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo' };
+  return map[ext] || 'video/mp4';
 }
