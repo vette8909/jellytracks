@@ -54,6 +54,7 @@ async function loadTrack() {
       videoLoading.innerHTML = '<p style="color:var(--text-muted);font-size:.9rem;">Could not load video</p>';
     }, { once: true });
 
+    addToRecentlyPlayed(trackId);
     playerLayout.hidden = false;
     loadSidebar();
   } catch {

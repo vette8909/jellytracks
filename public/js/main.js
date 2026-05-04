@@ -10,20 +10,51 @@ const trackCount = document.getElementById('trackCount');
 const heroSection = document.getElementById('heroSection');
 
 let debounceTimer = null;
-let allTracks = [];
 
-async function fetchTracks(query = '') {
+async function loadHome() {
   loadingSpinner.hidden = false;
   tracksGrid.hidden = true;
   emptyState.hidden = true;
+  heroSection.style.display = '';
+  sectionTitle.textContent = 'Recently Performed';
+
+  const ids = getRecentlyPlayed();
+  if (ids.length === 0) {
+    loadingSpinner.hidden = true;
+    emptyState.hidden = false;
+    emptyMessage.textContent = 'No recently performed tracks';
+    emptyHint.textContent = 'Tracks you play will appear here';
+    trackCount.hidden = true;
+    return;
+  }
 
   try {
-    const url = query ? `/api/tracks?search=${encodeURIComponent(query)}` : '/api/tracks';
-    const res = await fetch(url);
+    const res = await fetch('/api/tracks');
+    if (!res.ok) throw new Error();
+    const all = await res.json();
+    const recent = ids.map(id => all.find(t => t.id === id)).filter(Boolean).slice(0, 12);
+    renderTracks(recent, '');
+  } catch {
+    loadingSpinner.hidden = true;
+    emptyState.hidden = false;
+    emptyMessage.textContent = 'Could not load tracks';
+    emptyHint.textContent = 'Check your connection and try again';
+  }
+}
+
+async function fetchTracks(query) {
+  loadingSpinner.hidden = false;
+  tracksGrid.hidden = true;
+  emptyState.hidden = true;
+  heroSection.style.display = 'none';
+  sectionTitle.textContent = `Results for "${query}"`;
+
+  try {
+    const res = await fetch(`/api/tracks?search=${encodeURIComponent(query)}`);
     if (!res.ok) throw new Error('Failed to load tracks');
     const tracks = await res.json();
     renderTracks(tracks, query);
-  } catch (err) {
+  } catch {
     loadingSpinner.hidden = true;
     emptyState.hidden = false;
     emptyMessage.textContent = 'Could not load tracks';
@@ -34,14 +65,6 @@ async function fetchTracks(query = '') {
 function renderTracks(tracks, query) {
   loadingSpinner.hidden = true;
 
-  if (query) {
-    heroSection.style.display = 'none';
-    sectionTitle.textContent = `Results for "${query}"`;
-  } else {
-    heroSection.style.display = '';
-    sectionTitle.textContent = 'All Tracks';
-  }
-
   if (tracks.length === 0) {
     tracksGrid.hidden = true;
     emptyState.hidden = false;
@@ -49,17 +72,16 @@ function renderTracks(tracks, query) {
       emptyMessage.textContent = `No results for "${query}"`;
       emptyHint.textContent = 'Try a different song title or artist name';
     } else {
-      emptyMessage.textContent = 'No tracks yet';
-      emptyHint.textContent = 'Upload a track to get started';
+      emptyMessage.textContent = 'No recently performed tracks';
+      emptyHint.textContent = 'Tracks you play will appear here';
     }
     trackCount.hidden = true;
     return;
   }
 
   trackCount.textContent = `${tracks.length} track${tracks.length !== 1 ? 's' : ''}`;
-  trackCount.hidden = false;
-
-  tracksGrid.innerHTML = tracks.map(track => cardHTML(track)).join('');
+  trackCount.hidden = query ? false : true;
+  tracksGrid.innerHTML = tracks.map(cardHTML).join('');
   tracksGrid.hidden = false;
   emptyState.hidden = true;
 }
@@ -98,10 +120,13 @@ function formatDate(iso) {
   } catch { return ''; }
 }
 
-
 function doSearch() {
   const q = searchInput.value.trim();
-  fetchTracks(q);
+  if (q) {
+    fetchTracks(q);
+  } else {
+    loadHome();
+  }
 }
 
 searchInput.addEventListener('input', () => {
@@ -115,8 +140,10 @@ searchInput.addEventListener('keydown', e => {
 
 searchBtn.addEventListener('click', () => { clearTimeout(debounceTimer); doSearch(); });
 
-// Pre-fill search if arriving from the player page search redirect
-const urlParams = new URLSearchParams(location.search);
-const initialQuery = urlParams.get('search') || '';
-if (initialQuery) searchInput.value = initialQuery;
-fetchTracks(initialQuery);
+const initialQuery = new URLSearchParams(location.search).get('search') || '';
+if (initialQuery) {
+  searchInput.value = initialQuery;
+  fetchTracks(initialQuery);
+} else {
+  loadHome();
+}
