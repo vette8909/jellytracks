@@ -12,6 +12,15 @@ export async function onRequest({ request, env, params }) {
     return Response.json({ ...track, videoUrl }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
+  if (request.method === 'POST') {
+    const tracks = await loadTracksIndex(env.TRACKS_KV);
+    const track = tracks.find(t => t.id === id);
+    if (!track) return Response.json({ error: 'Not found' }, { status: 404 });
+    track.views = (track.views || 0) + 1;
+    await saveTracksIndex(env.TRACKS_KV, tracks);
+    return Response.json({ views: track.views });
+  }
+
   if (request.method === 'DELETE') {
     let body;
     try {

@@ -9,6 +9,7 @@ const videoTitle = document.getElementById('videoTitle');
 const videoArtist = document.getElementById('videoArtist');
 const videoDate = document.getElementById('videoDate');
 const sidebarList = document.getElementById('sidebarList');
+const sidebarTitle = document.getElementById('sidebarTitle');
 const sidebarSearch = document.getElementById('sidebarSearch');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
@@ -90,11 +91,25 @@ function scoreTrack(candidate, current) {
 }
 
 function getSuggestions(allTracks, current) {
-  return allTracks
+  const scored = allTracks
     .map(t => ({ track: t, score: scoreTrack(t, current) }))
-    .filter(({ score }) => score >= 0)
+    .filter(({ score }) => score >= 0); // -1 means current track, exclude it
+
+  const relevant = scored
+    .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score)
     .map(({ track }) => track);
+
+  if (relevant.length > 0) {
+    return { tracks: relevant, label: 'More Tracks' };
+  }
+
+  // No related tracks — show others sorted by play count
+  const popular = [...scored]
+    .sort((a, b) => (b.track.views || 0) - (a.track.views || 0))
+    .map(({ track }) => track);
+
+  return { tracks: popular, label: 'Popular Tracks' };
 }
 
 function formatDate(iso) {
@@ -129,6 +144,7 @@ async function loadTrack() {
     }, { once: true });
 
     addToRecentlyPlayed(trackId);
+    fetch(`/api/track/${encodeURIComponent(trackId)}`, { method: 'POST' }).catch(() => {});
     playerLayout.hidden = false;
     loadSidebar();
   } catch {
@@ -143,9 +159,12 @@ async function loadSidebar(query = '') {
     const res = await fetch(url);
     const tracks = await res.json();
     if (sidebarSearchActive || !currentTrack) {
+      sidebarTitle.textContent = query ? 'Search Results' : 'More Tracks';
       renderSidebar(tracks);
     } else {
-      renderSidebar(getSuggestions(tracks, currentTrack));
+      const { tracks: suggested, label } = getSuggestions(tracks, currentTrack);
+      sidebarTitle.textContent = label;
+      renderSidebar(suggested);
     }
   } catch {
     sidebarList.innerHTML = '<p style="color:var(--text-faint);font-size:.82rem;padding:10px 0;">Could not load tracks</p>';

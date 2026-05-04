@@ -34,7 +34,7 @@ export async function onRequestPost({ request, env }) {
     } catch {}
   }
 
-  const track = { id, title, artist, videoKey, thumbnailKey, thumbnailUrl, uploadedAt: new Date().toISOString() };
+  const track = { id, title, artist, videoKey, thumbnailKey, thumbnailUrl, views: 0, uploadedAt: new Date().toISOString() };
   const tracks = await loadTracksIndex(env.TRACKS_KV);
   tracks.unshift(track);
   await saveTracksIndex(env.TRACKS_KV, tracks);
